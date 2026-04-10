@@ -6,7 +6,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from database import Database
 from scheduler import setup_scheduler
 from handlers.group import start, hilfe
-from handlers.quest import show_quest, mark_done, propose
+from handlers.quest import show_quest, mark_done, propose, add_quest
 from handlers.stats import show_stats
 
 logging.basicConfig(
@@ -41,6 +41,7 @@ def main():
     app.add_handler(CommandHandler("done", mark_done))
     app.add_handler(CommandHandler("propose", propose))
     app.add_handler(CommandHandler("stats", show_stats))
+    app.add_handler(CommandHandler("addquest", add_quest))
     app.add_handler(CommandHandler("hilfe", hilfe))
 
     # Foto mit /done als Bildunterschrift

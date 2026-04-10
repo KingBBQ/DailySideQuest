@@ -1,5 +1,6 @@
 from telegram import Update
 from telegram.ext import ContextTypes
+from database import CATEGORY_EMOJI, VALID_CATEGORIES
 
 
 def _require_group(update: Update) -> bool:
@@ -25,10 +26,14 @@ async def show_quest(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    category_line = ""
+    if quest["category"]:
+        emoji = CATEGORY_EMOJI.get(quest["category"], "📋")
+        category_line = f"\n{emoji} _{quest['category']}_"
+
+    text = f"🎯 *Quest des Tages*\n\n_{quest['text']}_{category_line}"
+
     completions = await db.get_completions_today(chat.id)
-
-    text = f"🎯 *Quest des Tages*\n\n_{quest['text']}_"
-
     if completions:
         text += f"\n\n✅ *Schon erledigt ({len(completions)}):*\n"
         for c in completions:
@@ -51,7 +56,6 @@ async def mark_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await db.register_user(user.id, chat.id, user.username or "", user.first_name)
 
-    # Foto optional – entweder direkt oder als Antwort mit /done
     photo_file_id = None
     if update.message.photo:
         photo_file_id = update.message.photo[-1].file_id
@@ -80,9 +84,8 @@ async def mark_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown",
         )
     else:
-        position = result["done_count"]
         await update.message.reply_text(
-            f"✅ Quest erledigt, {user.first_name}! (Platz {position})\n"
+            f"✅ Quest erledigt, {user.first_name}! (Platz {result['done_count']})\n"
             f"{streak_text}"
         )
 
@@ -124,3 +127,67 @@ async def propose(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"_({queue_size} Quest{'s' if queue_size != 1 else ''} warten aktuell)_",
         parse_mode="Markdown",
     )
+
+
+async def add_quest(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Nur für Gruppen-Admins: Quest dauerhaft zum Pool hinzufügen."""
+    chat = update.effective_chat
+    user = update.effective_user
+    db = context.bot_data["db"]
+
+    if not _require_group(update):
+        await update.message.reply_text("Diesen Befehl bitte in einer Gruppe verwenden.")
+        return
+
+    # Admin-Check
+    member = await chat.get_member(user.id)
+    if member.status not in ("creator", "administrator"):
+        await update.message.reply_text(
+            "Nur Gruppen-Admins können Quests dauerhaft zum Pool hinzufügen.\n"
+            "Für eigene Vorschläge: /propose"
+        )
+        return
+
+    if not context.args:
+        cats = ", ".join(VALID_CATEGORIES[:-1])  # ohne "Allgemein"
+        await update.message.reply_text(
+            "Syntax: /addquest [Kategorie:] Text\n\n"
+            f"Kategorien: {cats}\n\n"
+            "Beispiele:\n"
+            "/addquest Geh heute barfuß durch Gras\n"
+            "/addquest Mut: Sing laut in der U-Bahn"
+        )
+        return
+
+    full_text = " ".join(context.args)
+    category = "Allgemein"
+
+    # Optionalen Kategorie-Prefix erkennen: "Mut: Text"
+    for cat in VALID_CATEGORIES:
+        if full_text.lower().startswith(cat.lower() + ":"):
+            category = cat
+            full_text = full_text[len(cat) + 1:].strip()
+            break
+
+    if len(full_text) < 10:
+        await update.message.reply_text("Die Quest ist zu kurz (min. 10 Zeichen).")
+        return
+
+    if len(full_text) > 200:
+        await update.message.reply_text(
+            f"Die Quest ist zu lang ({len(full_text)}/200 Zeichen)."
+        )
+        return
+
+    success = await db.add_to_pool(full_text, category)
+
+    if success:
+        emoji = CATEGORY_EMOJI.get(category, "📋")
+        await update.message.reply_text(
+            f"✅ Quest dauerhaft zum Pool hinzugefügt!\n\n"
+            f"{emoji} *{category}*\n"
+            f"_{full_text}_",
+            parse_mode="Markdown",
+        )
+    else:
+        await update.message.reply_text("Diese Quest ist bereits im Pool.")

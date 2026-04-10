@@ -7,8 +7,10 @@ HILFE_TEXT = (
     "/done – Quest als erledigt markieren (optional Foto dranhängen)\n"
     "/propose [Text] – Quest für morgen vorschlagen\n"
     "/stats – Rangliste der Gruppe\n"
+    "/addquest [Kategorie:] Text – Quest dauerhaft zum Pool hinzufügen _(nur Admins)_\n"
     "/hilfe – Diese Übersicht\n\n"
     "Jeden Tag um 9 Uhr wird die Quest bekannt gegeben.\n"
+    "Sonntag um 20 Uhr gibt es den Wochenrückblick 📅\n"
     "Wer als Erster fertig ist, bekommt den 🏆 Titel!"
 )
 

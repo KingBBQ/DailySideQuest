@@ -5,38 +5,52 @@ from typing import Optional, List, Dict
 
 logger = logging.getLogger(__name__)
 
-# Vorgefertigte Quests – kannst du direkt in der DB unter quest_pool bearbeiten
+# Emoji pro Kategorie – wird überall verwendet
+CATEGORY_EMOJI = {
+    "Sozial": "🤝",
+    "Körper": "💪",
+    "Kreativ": "🎨",
+    "Mut": "🦁",
+    "Digital": "📵",
+    "Spaß": "😄",
+    "Abenteuer": "🌍",
+    "Allgemein": "📋",
+}
+
+VALID_CATEGORIES = list(CATEGORY_EMOJI.keys())
+
+# Vorgefertigte Quests mit Kategorie – direkt in der DB unter quest_pool bearbeitbar
 QUEST_POOL = [
-    "Sprich heute eine fremde Person an und frag nach dem Weg – und führe ein kurzes Gespräch",
-    "Mach jemandem ein ehrliches Kompliment – einem Fremden oder Bekannten",
-    "Schreib einer Person aus deiner Vergangenheit eine Nachricht",
-    "Ruf heute jemanden an, dem du sonst nur schreibst",
-    "Bring jemandem spontan etwas mit (Kaffee, Snack, etc.)",
-    "Betritt ein Geschäft, das du noch nie betreten hast",
-    "Bestell im Restaurant oder Café, ohne die Karte zu lesen – frag nach einer Empfehlung",
-    "Trag heute etwas, das du sonst nie tragen würdest",
-    "Geh heute einen anderen Weg als sonst (Arbeit, Einkauf, etc.)",
-    "Mach 50 Liegestütze – verteilt über den ganzen Tag",
-    "Geh heute 10.000 Schritte",
-    "Nimm den ganzen Tag die Treppe statt den Aufzug",
-    "Mach 5 Minuten Meditation oder bewusstes Atmen",
-    "Tanz 3 Minuten alleine zu deinem Lieblingssong",
-    "Zeichne etwas – egal wie schlecht es wird",
-    "Schreib ein Haiku über deinen heutigen Tag",
-    "Fotografiere etwas Schönes, das du sonst übersehen würdest",
-    "Koch heute etwas, das du noch nie gekocht hast",
-    "2 Stunden lang kein Social Media",
-    "Stell dein Handy für 1 Stunde komplett auf Flugmodus",
-    "Schick heute 5 Sprachnachrichten statt Texte",
-    "Sing ein ganzes Lied laut durch – alleine oder vor anderen",
-    "Zähl heute, wie oft du das Wort 'okay' sagst",
-    "Sag den ganzen Tag 'Danke' auf Italienisch: Grazie!",
-    "Probiere heute ein Essen, das du normalerweise nie essen würdest",
-    "Schau heute den Sonnenuntergang oder Sonnenaufgang an",
-    "Sitz 10 Minuten alleine in einem Café und beobachte die Menschen um dich herum",
-    "Finde und fotografiere etwas Ungewöhnliches auf deinem heutigen Weg",
-    "Kauf etwas in einem Second-Hand-Laden oder auf einem Flohmarkt unter 2 Euro",
-    "Sprich heute eine Person an, die du schon länger ansprechen wolltest",
+    ("Sprich heute eine fremde Person an und frag nach dem Weg – und führe ein kurzes Gespräch", "Sozial"),
+    ("Mach jemandem ein ehrliches Kompliment – einem Fremden oder Bekannten", "Sozial"),
+    ("Schreib einer Person aus deiner Vergangenheit eine Nachricht", "Sozial"),
+    ("Ruf heute jemanden an, dem du sonst nur schreibst", "Sozial"),
+    ("Bring jemandem spontan etwas mit (Kaffee, Snack, etc.)", "Sozial"),
+    ("Betritt ein Geschäft, das du noch nie betreten hast", "Abenteuer"),
+    ("Bestell im Restaurant oder Café, ohne die Karte zu lesen – frag nach einer Empfehlung", "Mut"),
+    ("Trag heute etwas, das du sonst nie tragen würdest", "Mut"),
+    ("Geh heute einen anderen Weg als sonst (Arbeit, Einkauf, etc.)", "Abenteuer"),
+    ("Mach 50 Liegestütze – verteilt über den ganzen Tag", "Körper"),
+    ("Geh heute 10.000 Schritte", "Körper"),
+    ("Nimm den ganzen Tag die Treppe statt den Aufzug", "Körper"),
+    ("Mach 5 Minuten Meditation oder bewusstes Atmen", "Körper"),
+    ("Tanz 3 Minuten alleine zu deinem Lieblingssong", "Spaß"),
+    ("Zeichne etwas – egal wie schlecht es wird", "Kreativ"),
+    ("Schreib ein Haiku über deinen heutigen Tag", "Kreativ"),
+    ("Fotografiere etwas Schönes, das du sonst übersehen würdest", "Kreativ"),
+    ("Koch heute etwas, das du noch nie gekocht hast", "Kreativ"),
+    ("2 Stunden lang kein Social Media", "Digital"),
+    ("Stell dein Handy für 1 Stunde komplett auf Flugmodus", "Digital"),
+    ("Schick heute 5 Sprachnachrichten statt Texte", "Digital"),
+    ("Sing ein ganzes Lied laut durch – alleine oder vor anderen", "Spaß"),
+    ("Zähl heute, wie oft du das Wort 'okay' sagst", "Spaß"),
+    ("Sag den ganzen Tag 'Danke' auf Italienisch: Grazie!", "Spaß"),
+    ("Probiere heute ein Essen, das du normalerweise nie essen würdest", "Abenteuer"),
+    ("Schau heute den Sonnenuntergang oder Sonnenaufgang an", "Abenteuer"),
+    ("Sitz 10 Minuten alleine in einem Café und beobachte die Menschen um dich herum", "Abenteuer"),
+    ("Finde und fotografiere etwas Ungewöhnliches auf deinem heutigen Weg", "Kreativ"),
+    ("Kauf etwas in einem Second-Hand-Laden oder auf einem Flohmarkt unter 2 Euro", "Abenteuer"),
+    ("Sprich heute eine Person an, die du schon länger ansprechen wolltest", "Mut"),
 ]
 
 
@@ -73,6 +87,7 @@ class Database:
                     text TEXT,
                     quest_date TEXT,
                     proposed_by INTEGER,
+                    category TEXT,
                     created_at TEXT DEFAULT (datetime('now'))
                 )
             """)
@@ -100,20 +115,38 @@ class Database:
                 CREATE TABLE IF NOT EXISTS quest_pool (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     text TEXT UNIQUE,
+                    category TEXT DEFAULT 'Allgemein',
                     used_count INTEGER DEFAULT 0
                 )
             """)
 
-            # Quests nur einfügen wenn Pool leer ist
+            # Migrationen für bestehende Datenbanken
+            for stmt in [
+                "ALTER TABLE quest_pool ADD COLUMN category TEXT DEFAULT 'Allgemein'",
+                "ALTER TABLE daily_quests ADD COLUMN category TEXT",
+            ]:
+                try:
+                    await db.execute(stmt)
+                except Exception:
+                    pass  # Spalte existiert bereits
+
+            # Quest-Pool befüllen / Kategorien aktualisieren
             async with db.execute("SELECT COUNT(*) FROM quest_pool") as cursor:
                 (count,) = await cursor.fetchone()
 
             if count == 0:
                 await db.executemany(
-                    "INSERT OR IGNORE INTO quest_pool (text) VALUES (?)",
-                    [(q,) for q in QUEST_POOL],
+                    "INSERT OR IGNORE INTO quest_pool (text, category) VALUES (?, ?)",
+                    QUEST_POOL,
                 )
                 logger.info(f"Quest-Pool mit {len(QUEST_POOL)} Quests befüllt")
+            else:
+                # Kategorien für bestehende Einträge ohne Kategorie setzen
+                for text, category in QUEST_POOL:
+                    await db.execute(
+                        "UPDATE quest_pool SET category = ? WHERE text = ? AND (category IS NULL OR category = 'Allgemein')",
+                        (category, text),
+                    )
 
             await db.commit()
         logger.info("Datenbank initialisiert")
@@ -152,12 +185,12 @@ class Database:
         today = date.today().isoformat()
         async with aiosqlite.connect(self.path) as db:
             async with db.execute(
-                "SELECT id, text, proposed_by FROM daily_quests WHERE chat_id = ? AND quest_date = ?",
+                "SELECT id, text, proposed_by, category FROM daily_quests WHERE chat_id = ? AND quest_date = ?",
                 (chat_id, today),
             ) as cursor:
                 row = await cursor.fetchone()
         if row:
-            return {"id": row[0], "text": row[1], "proposed_by": row[2]}
+            return {"id": row[0], "text": row[1], "proposed_by": row[2], "category": row[3]}
         return None
 
     async def pick_quest_for_tomorrow(self, chat_id: int) -> Optional[str]:
@@ -165,7 +198,6 @@ class Database:
         tomorrow = (date.today() + timedelta(days=1)).isoformat()
 
         async with aiosqlite.connect(self.path) as db:
-            # Schon gesetzt?
             async with db.execute(
                 "SELECT id FROM daily_quests WHERE chat_id = ? AND quest_date = ?",
                 (chat_id, tomorrow),
@@ -184,25 +216,25 @@ class Database:
                 queue_id, text, proposed_by = queued
                 await db.execute("DELETE FROM quest_queue WHERE id = ?", (queue_id,))
                 await db.execute(
-                    "INSERT INTO daily_quests (chat_id, text, quest_date, proposed_by) VALUES (?, ?, ?, ?)",
+                    "INSERT INTO daily_quests (chat_id, text, quest_date, proposed_by, category) VALUES (?, ?, ?, ?, NULL)",
                     (chat_id, text, tomorrow, proposed_by),
                 )
             else:
                 # Pool: am wenigsten benutzte Quest, zufällig bei Gleichstand
                 async with db.execute(
-                    "SELECT id, text FROM quest_pool ORDER BY used_count ASC, RANDOM() LIMIT 1"
+                    "SELECT id, text, category FROM quest_pool ORDER BY used_count ASC, RANDOM() LIMIT 1"
                 ) as cursor:
                     pool_row = await cursor.fetchone()
 
                 if pool_row:
-                    pool_id, text = pool_row
+                    pool_id, text, category = pool_row
                     await db.execute(
                         "UPDATE quest_pool SET used_count = used_count + 1 WHERE id = ?",
                         (pool_id,),
                     )
                     await db.execute(
-                        "INSERT INTO daily_quests (chat_id, text, quest_date, proposed_by) VALUES (?, ?, ?, NULL)",
-                        (chat_id, text, tomorrow),
+                        "INSERT INTO daily_quests (chat_id, text, quest_date, proposed_by, category) VALUES (?, ?, ?, NULL, ?)",
+                        (chat_id, text, tomorrow, category),
                     )
                 else:
                     text = None
@@ -223,6 +255,19 @@ class Database:
             ) as cursor:
                 (count,) = await cursor.fetchone()
         return count
+
+    async def add_to_pool(self, text: str, category: str = "Allgemein") -> bool:
+        """Fügt Quest zum globalen Pool hinzu. Gibt False zurück wenn bereits vorhanden."""
+        async with aiosqlite.connect(self.path) as db:
+            try:
+                await db.execute(
+                    "INSERT INTO quest_pool (text, category) VALUES (?, ?)",
+                    (text, category),
+                )
+                await db.commit()
+                return True
+            except aiosqlite.IntegrityError:
+                return False
 
     async def mark_done(
         self, chat_id: int, user_id: int, photo_file_id: Optional[str] = None
@@ -272,13 +317,8 @@ class Database:
 
             today_date = date.today()
             if last_date:
-                last = date.fromisoformat(last_date)
-                gap = (today_date - last).days
-                if gap <= 2:
-                    # Gestern oder Grace Day (1 Tag übersprungen)
-                    new_streak = streak + 1
-                else:
-                    new_streak = 1
+                gap = (today_date - date.fromisoformat(last_date)).days
+                new_streak = streak + 1 if gap <= 2 else 1
             else:
                 new_streak = 1
 
@@ -329,3 +369,45 @@ class Database:
             {"first_name": r[0], "streak": r[1], "total_completed": r[2], "total_first": r[3]}
             for r in rows
         ]
+
+    async def get_weekly_stats(self, chat_id: int) -> Dict:
+        """Statistiken der letzten 7 Tage."""
+        async with aiosqlite.connect(self.path) as db:
+            # Wer hat diese Woche am meisten erledigt
+            async with db.execute(
+                """SELECT u.first_name, COUNT(*) as week_count
+                   FROM completions c
+                   JOIN users u ON c.user_id = u.user_id AND c.chat_id = u.chat_id
+                   JOIN daily_quests dq ON c.quest_id = dq.id
+                   WHERE c.chat_id = ? AND date(dq.quest_date) >= date('now', '-6 days')
+                   GROUP BY c.user_id
+                   ORDER BY week_count DESC""",
+                (chat_id,),
+            ) as cursor:
+                completions = await cursor.fetchall()
+
+            # Wie viele Quests gab es diese Woche
+            async with db.execute(
+                """SELECT COUNT(DISTINCT quest_date)
+                   FROM daily_quests
+                   WHERE chat_id = ? AND date(quest_date) >= date('now', '-6 days')""",
+                (chat_id,),
+            ) as cursor:
+                (total_quests,) = await cursor.fetchone()
+
+            # Top-Streaks aktuell
+            async with db.execute(
+                """SELECT first_name, streak
+                   FROM users
+                   WHERE chat_id = ? AND streak > 0
+                   ORDER BY streak DESC
+                   LIMIT 3""",
+                (chat_id,),
+            ) as cursor:
+                streaks = await cursor.fetchall()
+
+        return {
+            "completions": [{"first_name": r[0], "count": r[1]} for r in completions],
+            "total_quests": total_quests,
+            "streaks": [{"first_name": r[0], "streak": r[1]} for r in streaks],
+        }
