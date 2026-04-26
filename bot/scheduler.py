@@ -117,6 +117,14 @@ async def weekly_summary(context):
                     text += f"• {s['first_name']}: {s['streak']} Tage {fire}\n"
                 text += "\n"
 
+            if stats.get("scores"):
+                text += "⭐ *Top-Punkte diese Woche:*\n"
+                medals = ["🥇", "🥈", "🥉"]
+                for i, sc in enumerate(stats["scores"][:3]):
+                    medal = medals[i] if i < 3 else "•"
+                    text += f"{medal} {sc['first_name']}: {sc['score']:.1f}\n"
+                text += "\n"
+
             n = stats["total_quests"]
             text += f"_Insgesamt {n} Quest{'s' if n != 1 else ''} diese Woche. Weiter so! 💪_"
 

@@ -5,6 +5,7 @@ HILFE_TEXT = (
     "🎯 *Daily Side Quest – Befehle*\n\n"
     "/quest – Heutige Quest anzeigen + wer schon fertig ist\n"
     "/done – Quest als erledigt markieren (optional Foto dranhängen)\n"
+    "/nachholen – Verpasste Quest der letzten 7 Tage nachholen (zählt 0,5 ⭐)\n"
     "/propose [Text] – Quest für morgen vorschlagen\n"
     "/stats – Rangliste der Gruppe\n"
     "/addquest [Kategorie:] Text – Quest dauerhaft zum Pool hinzufügen _(nur Admins)_\n"

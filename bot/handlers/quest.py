@@ -1,6 +1,10 @@
-from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 from database import CATEGORY_EMOJI, VALID_CATEGORIES
+
+
+def _format_date(iso_date: str) -> str:
+    return f"{iso_date[8:10]}.{iso_date[5:7]}."
 
 
 def _require_group(update: Update) -> bool:
@@ -41,6 +45,13 @@ async def show_quest(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text += f"• {c['first_name']}{badge}\n"
     else:
         text += "\n\n_Noch niemand hat die Quest erledigt – sei der Erste!_ 🚀"
+
+    open_for_user = await db.list_retroactive_candidates(chat.id, user.id)
+    if open_for_user:
+        n = len(open_for_user)
+        text += (
+            f"\n\n📥 _Du hast {n} offene Quest{'s' if n != 1 else ''} aus den letzten Tagen — /nachholen_"
+        )
 
     await update.message.reply_text(text, parse_mode="Markdown")
 
@@ -191,3 +202,80 @@ async def add_quest(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     else:
         await update.message.reply_text("Diese Quest ist bereits im Pool.")
+
+
+async def nachholen(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Listet offene Quests der letzten 7 Tage als Buttons auf."""
+    chat = update.effective_chat
+    user = update.effective_user
+    db = context.bot_data["db"]
+
+    if not _require_group(update):
+        await update.message.reply_text("Diesen Befehl bitte in einer Gruppe verwenden.")
+        return
+
+    await db.register_user(user.id, chat.id, user.username or "", user.first_name)
+
+    candidates = await db.list_retroactive_candidates(chat.id, user.id)
+
+    if not candidates:
+        await update.message.reply_text(
+            "📥 Keine offenen Quests aus den letzten 7 Tagen 🎉"
+        )
+        return
+
+    keyboard = []
+    for c in candidates:
+        d_pretty = _format_date(c["quest_date"])
+        emoji = CATEGORY_EMOJI.get(c["category"], "📋") if c["category"] else "📋"
+        # Telegram-Button-Label max ~64 Zeichen — Quest-Text kürzen
+        text_short = c["text"] if len(c["text"]) <= 40 else c["text"][:38] + "…"
+        label = f"{emoji} {d_pretty} — {text_short}"
+        keyboard.append(
+            [InlineKeyboardButton(label, callback_data=f"nachholen:{c['quest_date']}")]
+        )
+
+    await update.message.reply_text(
+        "📥 *Offene Quests zum Nachholen* (letzte 7 Tage)\n\n"
+        "_Klick auf einen Tag, um ihn als erledigt zu markieren — zählt 0,5 ⭐_",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+async def nachholen_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Verarbeitet Klick auf einen Nachhol-Button."""
+    query = update.callback_query
+    db = context.bot_data["db"]
+
+    if not query.data or not query.data.startswith("nachholen:"):
+        await query.answer()
+        return
+
+    quest_date = query.data.split(":", 1)[1]
+    user = query.from_user
+    chat = query.message.chat
+
+    if chat.type == "private":
+        await query.answer("Diesen Befehl bitte in einer Gruppe verwenden.", show_alert=True)
+        return
+
+    await db.register_user(user.id, chat.id, user.username or "", user.first_name)
+
+    result = await db.mark_retroactive(chat.id, user.id, quest_date)
+    d_pretty = _format_date(quest_date)
+
+    if result["status"] == "ok":
+        await query.answer(f"+0,5 ⭐ für {d_pretty}")
+        await query.message.reply_text(
+            f"📥 *{user.first_name}* hat die Quest vom {d_pretty} nachgeholt! +0,5 ⭐",
+            parse_mode="Markdown",
+        )
+    elif result["status"] == "already_done":
+        await query.answer("Du hast diese Quest schon erledigt.", show_alert=True)
+    elif result["status"] == "no_quest_for_date":
+        await query.answer(f"Keine Quest für den {d_pretty}.", show_alert=True)
+    elif result["status"] == "out_of_window":
+        await query.answer("Außerhalb des 7-Tage-Fensters.", show_alert=True)
+    else:
+        await query.answer("Konnte nicht nachgeholt werden.", show_alert=True)

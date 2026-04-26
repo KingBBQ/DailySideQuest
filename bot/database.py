@@ -1,9 +1,37 @@
 import aiosqlite
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Optional, List, Dict
+import pytz
 
 logger = logging.getLogger(__name__)
+
+BERLIN = pytz.timezone("Europe/Berlin")
+QUEST_DAY_START = time(9, 0)
+
+
+def _current_quest_date() -> str:
+    """Aktiver Quest-Tag (ISO).
+
+    Eine Quest läuft fachlich von 09:00 Berlin bis zum nächsten Tag 09:00 Berlin.
+    Vor 09:00 Berlin gehört man also noch zum Quest-Tag des Vortags.
+    """
+    now_berlin = datetime.now(BERLIN)
+    if now_berlin.time() < QUEST_DAY_START:
+        return (now_berlin.date() - timedelta(days=1)).isoformat()
+    return now_berlin.date().isoformat()
+
+
+def _next_quest_date() -> str:
+    """Nächster Quest-Tag, der vorbereitet werden soll.
+
+    Vor 09:00 Berlin: heutiger Kalendertag (wird heute 09:00 Uhr aktiv).
+    Ab 09:00 Berlin: morgiger Kalendertag (wird morgen 09:00 Uhr aktiv).
+    """
+    now_berlin = datetime.now(BERLIN)
+    if now_berlin.time() < QUEST_DAY_START:
+        return now_berlin.date().isoformat()
+    return (now_berlin.date() + timedelta(days=1)).isoformat()
 
 # Emoji pro Kategorie – wird überall verwendet
 CATEGORY_EMOJI = {
@@ -124,6 +152,8 @@ class Database:
             for stmt in [
                 "ALTER TABLE quest_pool ADD COLUMN category TEXT DEFAULT 'Allgemein'",
                 "ALTER TABLE daily_quests ADD COLUMN category TEXT",
+                "ALTER TABLE completions ADD COLUMN is_retroactive INTEGER DEFAULT 0",
+                "ALTER TABLE completions ADD COLUMN credited_score REAL DEFAULT 1.0",
             ]:
                 try:
                     await db.execute(stmt)
@@ -182,7 +212,7 @@ class Database:
         return [row[0] for row in rows]
 
     async def get_todays_quest(self, chat_id: int) -> Optional[Dict]:
-        today = date.today().isoformat()
+        today = _current_quest_date()
         async with aiosqlite.connect(self.path) as db:
             async with db.execute(
                 "SELECT id, text, proposed_by, category FROM daily_quests WHERE chat_id = ? AND quest_date = ?",
@@ -194,8 +224,8 @@ class Database:
         return None
 
     async def pick_quest_for_tomorrow(self, chat_id: int) -> Optional[str]:
-        """Wählt die Quest für morgen aus Queue oder Pool."""
-        tomorrow = (date.today() + timedelta(days=1)).isoformat()
+        """Wählt die Quest für den nächsten Quest-Tag aus Queue oder Pool."""
+        tomorrow = _next_quest_date()
 
         async with aiosqlite.connect(self.path) as db:
             async with db.execute(
@@ -273,7 +303,7 @@ class Database:
         self, chat_id: int, user_id: int, photo_file_id: Optional[str] = None
     ) -> Dict:
         """Markiert Quest als erledigt. Gibt Status und neue Stats zurück."""
-        today = date.today().isoformat()
+        today = _current_quest_date()
 
         async with aiosqlite.connect(self.path) as db:
             async with db.execute(
@@ -302,7 +332,7 @@ class Database:
             is_first = done_count == 0
 
             await db.execute(
-                "INSERT INTO completions (quest_id, user_id, chat_id, photo_file_id, is_first) VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO completions (quest_id, user_id, chat_id, photo_file_id, is_first, is_retroactive, credited_score) VALUES (?, ?, ?, ?, ?, 0, 1.0)",
                 (quest_id, user_id, chat_id, photo_file_id, 1 if is_first else 0),
             )
 
@@ -315,7 +345,7 @@ class Database:
 
             streak, last_date = (user_row[0], user_row[1]) if user_row else (0, None)
 
-            today_date = date.today()
+            today_date = date.fromisoformat(today)
             if last_date:
                 gap = (today_date - date.fromisoformat(last_date)).days
                 new_streak = streak + 1 if gap <= 2 else 1
@@ -341,7 +371,7 @@ class Database:
         }
 
     async def get_completions_today(self, chat_id: int) -> List[Dict]:
-        today = date.today().isoformat()
+        today = _current_quest_date()
         async with aiosqlite.connect(self.path) as db:
             async with db.execute(
                 """SELECT u.first_name, c.completed_at, c.is_first
@@ -358,15 +388,25 @@ class Database:
     async def get_stats(self, chat_id: int) -> List[Dict]:
         async with aiosqlite.connect(self.path) as db:
             async with db.execute(
-                """SELECT first_name, streak, total_completed, total_first
-                   FROM users
-                   WHERE chat_id = ?
-                   ORDER BY streak DESC, total_completed DESC""",
+                """SELECT u.first_name, u.streak, u.total_completed, u.total_first,
+                          COALESCE(SUM(c.credited_score), 0) AS score
+                   FROM users u
+                   LEFT JOIN completions c
+                     ON c.user_id = u.user_id AND c.chat_id = u.chat_id
+                   WHERE u.chat_id = ?
+                   GROUP BY u.user_id
+                   ORDER BY u.streak DESC, u.total_completed DESC""",
                 (chat_id,),
             ) as cursor:
                 rows = await cursor.fetchall()
         return [
-            {"first_name": r[0], "streak": r[1], "total_completed": r[2], "total_first": r[3]}
+            {
+                "first_name": r[0],
+                "streak": r[1],
+                "total_completed": r[2],
+                "total_first": r[3],
+                "score": r[4],
+            }
             for r in rows
         ]
 
@@ -406,8 +446,98 @@ class Database:
             ) as cursor:
                 streaks = await cursor.fetchall()
 
+            # Top-Punkte der Woche (Summe credited_score in den letzten 7 Tagen)
+            async with db.execute(
+                """SELECT u.first_name, SUM(c.credited_score) AS week_score
+                   FROM completions c
+                   JOIN users u ON c.user_id = u.user_id AND c.chat_id = u.chat_id
+                   JOIN daily_quests dq ON c.quest_id = dq.id
+                   WHERE c.chat_id = ? AND date(dq.quest_date) >= date('now', '-6 days')
+                   GROUP BY c.user_id
+                   ORDER BY week_score DESC
+                   LIMIT 3""",
+                (chat_id,),
+            ) as cursor:
+                scores = await cursor.fetchall()
+
         return {
             "completions": [{"first_name": r[0], "count": r[1]} for r in completions],
             "total_quests": total_quests,
             "streaks": [{"first_name": r[0], "streak": r[1]} for r in streaks],
+            "scores": [{"first_name": r[0], "score": r[1]} for r in scores],
         }
+
+    async def list_retroactive_candidates(
+        self, chat_id: int, user_id: int
+    ) -> List[Dict]:
+        """Quests der letzten 7 Quest-Tage (exkl. heute), die der User noch nicht erledigt hat."""
+        today = date.fromisoformat(_current_quest_date())
+        window_start = (today - timedelta(days=7)).isoformat()
+        window_end_exclusive = today.isoformat()
+
+        async with aiosqlite.connect(self.path) as db:
+            async with db.execute(
+                """SELECT dq.quest_date, dq.text, dq.category
+                   FROM daily_quests dq
+                   LEFT JOIN completions c
+                     ON c.quest_id = dq.id AND c.user_id = ?
+                   WHERE dq.chat_id = ?
+                     AND dq.quest_date >= ?
+                     AND dq.quest_date < ?
+                     AND c.id IS NULL
+                   ORDER BY dq.quest_date DESC""",
+                (user_id, chat_id, window_start, window_end_exclusive),
+            ) as cursor:
+                rows = await cursor.fetchall()
+        return [
+            {"quest_date": r[0], "text": r[1], "category": r[2]} for r in rows
+        ]
+
+    async def mark_retroactive(
+        self,
+        chat_id: int,
+        user_id: int,
+        quest_date: str,
+        photo_file_id: Optional[str] = None,
+    ) -> Dict:
+        """Bucht eine nachgeholte Quest. Streak und last_completed_date bleiben unangetastet."""
+        today = date.fromisoformat(_current_quest_date())
+        try:
+            target = date.fromisoformat(quest_date)
+        except ValueError:
+            return {"status": "out_of_window"}
+
+        days_back = (today - target).days
+        if days_back < 1 or days_back > 7:
+            return {"status": "out_of_window"}
+
+        async with aiosqlite.connect(self.path) as db:
+            async with db.execute(
+                "SELECT id FROM daily_quests WHERE chat_id = ? AND quest_date = ?",
+                (chat_id, quest_date),
+            ) as cursor:
+                quest_row = await cursor.fetchone()
+
+            if not quest_row:
+                return {"status": "no_quest_for_date"}
+
+            quest_id = quest_row[0]
+
+            async with db.execute(
+                "SELECT id FROM completions WHERE quest_id = ? AND user_id = ?",
+                (quest_id, user_id),
+            ) as cursor:
+                if await cursor.fetchone():
+                    return {"status": "already_done"}
+
+            await db.execute(
+                "INSERT INTO completions (quest_id, user_id, chat_id, photo_file_id, is_first, is_retroactive, credited_score) VALUES (?, ?, ?, ?, 0, 1, 0.5)",
+                (quest_id, user_id, chat_id, photo_file_id),
+            )
+            await db.execute(
+                "UPDATE users SET total_completed = total_completed + 1 WHERE user_id = ? AND chat_id = ?",
+                (user_id, chat_id),
+            )
+            await db.commit()
+
+        return {"status": "ok", "quest_date": quest_date, "score_added": 0.5}
