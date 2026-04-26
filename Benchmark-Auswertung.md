@@ -13,18 +13,20 @@
 | Platz | Modell | Score | Begründung in einem Satz |
 |------:|--------|------:|--------------------------|
 | 1 | **Claude** | 9.5 / 10 | Vollständige Analyse mit Zeitlinie, exakte Zeilennummern, identifiziert Sekundär-Bug (Container-TZ), saubere & rückwärtskompatible Lösung mit Code. |
-| 2 | **Gemini** | 7.0 / 10 | Korrekte Diagnose, korrekter Lösungsansatz (logisches Datum), aber dünn — keine Zeilennummern, keine TZ-Betrachtung, Code-Snippet hat fehlenden Import. |
-| 3 | **Gemma** | 6.0 / 10 | Korrekt diagnostiziert und korrekter Lösungsansatz, aber sehr knapp und ohne Code/Zeilennummern. |
-| 4 | **Qwen** | 3.5 / 10 | "Thinking out loud" mit mehreren Sackgassen sichtbar im Output; kommt am Ende zur richtigen Diagnose, aber empfiehlt eine Lösung, die das User-Bedürfnis verfehlt (sperrt `/done` vor 9 Uhr, statt es korrekt der Vortags-Quest zuzuordnen). |
+| 2 | **Codex** | 8.5 / 10 | Saubere strukturierte Diagnose mit klickbaren Code-Links, identifiziert dieselben Stellen wie Claude inkl. Streak-Logik, gut begründete Lösung — aber kein konkreter Code-Snippet und Container-TZ-Sekundärbug nicht erfasst. |
+| 3 | **Gemini** | 7.0 / 10 | Korrekte Diagnose, korrekter Lösungsansatz (logisches Datum), aber dünn — keine Zeilennummern, keine TZ-Betrachtung, Code-Snippet hat fehlenden Import. |
+| 4 | **Gemma** | 6.0 / 10 | Korrekt diagnostiziert und korrekter Lösungsansatz, aber sehr knapp und ohne Code/Zeilennummern. |
+| 5 | **Qwen** | 3.5 / 10 | "Thinking out loud" mit mehreren Sackgassen sichtbar im Output; kommt am Ende zur richtigen Diagnose, aber empfiehlt eine Lösung, die das User-Bedürfnis verfehlt (sperrt `/done` vor 9 Uhr, statt es korrekt der Vortags-Quest zuzuordnen). |
 
 ### Feature-Aufgabe (Plan)
 
 | Platz | Modell | Score | Begründung in einem Satz |
 |------:|--------|------:|--------------------------|
 | 1 | **Claude** | 9.0 / 10 | Vollständigster Plan mit klaren Trennungen Streak/Gesamt/Punkte, exakte ALTER-Statements im Projekt-Stil, alle Edge-Cases dokumentiert, "bewusst nicht enthalten"-Sektion. |
-| 2 | **Gemini** | 5.5 / 10 | Knapp und sauber strukturiert, aber Streak-Heilung widerspricht "nur halb anrechnen", nur 1-Tage-Fenster, keine konkreten Code-Snippets. |
-| 3 | **Gemma** | 4.0 / 10 | Bare-Minimum-Plan, knapp aber funktional, aber mit englischen UI-Strings (Projekt ist deutsch) und ohne `weekly_summary`/`/quest`-Integration. |
-| 4 | **Qwen** | 3.0 / 10 | Viel Code, aber broken UX-Flow (mehrstufiger Callback → Photo → /done), undefinierte DB-Methoden, Tippfehler, Markdown-Bug, willkürliche Limits ("max 3 pro Woche", "Streak gecappt auf 10"). |
+| 2 | **Codex** | 8.0 / 10 | Konzeptuell fast identisch mit Claude (drei Metriken, 1.0/0.5, Streak nicht heilen, 7-Tage-Fenster, `/nachholen`), bringt eigenen guten Vorschlag `credited_score` pro Completion ein — aber kompakter, ohne konkrete Code-Snippets und ohne durchgerechnete User-Beispielmathe. |
+| 3 | **Gemini** | 5.5 / 10 | Knapp und sauber strukturiert, aber Streak-Heilung widerspricht "nur halb anrechnen", nur 1-Tage-Fenster, keine konkreten Code-Snippets. |
+| 4 | **Gemma** | 4.0 / 10 | Bare-Minimum-Plan, knapp aber funktional, aber mit englischen UI-Strings (Projekt ist deutsch) und ohne `weekly_summary`/`/quest`-Integration. |
+| 5 | **Qwen** | 3.0 / 10 | Viel Code, aber broken UX-Flow (mehrstufiger Callback → Photo → /done), undefinierte DB-Methoden, Tippfehler, Markdown-Bug, willkürliche Limits ("max 3 pro Woche", "Streak gecappt auf 10"). |
 
 ---
 
@@ -179,20 +181,50 @@ User-Beispielmathe: "die 3 und das nachgeholte nur halb anrechnen … insgesamt 
 
 ---
 
-### 2.5 Bug — Übersichts-Matrix
+### 2.5 Codex — `BugFix-codex.md`
 
-| Kriterium | Claude | Gemini | Gemma | Qwen |
-|-----------|:------:|:------:|:-----:|:----:|
-| Bug korrekt diagnostiziert | ✅ | ✅ | ✅ | ✅ (umständlich) |
-| Zeitlinien-Tabelle | ✅ | ❌ | teilweise | ✅ (widersprüchlich) |
-| Konkrete Zeilennummern | ✅ | ❌ | ❌ | teilweise |
-| Streak-Logik miterfasst | ✅ | ✅ | ❌ | ❌ |
-| `get_completions_today` miterfasst | ✅ | ✅ | ✅ | ❌ |
-| Container-TZ-Sekundärbug | ✅ | ❌ | ❌ | erwähnt, aber nicht gefixt |
-| Code-Snippets der Lösung | ✅ | teilweise (kaputt) | ❌ | ✅ (aber falsche Lösung) |
-| Alternativen diskutiert | ✅ | ❌ | ❌ | teilweise |
-| Lösung bewahrt User-Verhalten | ✅ | ✅ | ✅ | ❌ (blockiert /done vor 9 Uhr) |
-| Schema-Migration nötig | nein | nein | nein | ja (Option B) |
+**Stärken**
+
+- Bestätigt den Bug korrekt und sehr klar strukturiert mit getrennten Sektionen (Scheduler, Quest-Anzeige, Datenbanklogik, Root Cause).
+- **Klickbare Code-Links** mit Zeilennummern statt nur Text-Referenzen, z. B. `[bot/database.py](…/bot/database.py:184)` — ist im Markdown-Renderer ein direkter Sprung zur Stelle. Format-mäßig sogar besser als Claudes reine Text-Zeilennummern.
+- Identifiziert dieselben vier betroffenen DB-Methoden wie Claude (`get_todays_quest`, `mark_done`, `get_completions_today`, `pick_quest_for_tomorrow`).
+- **Streak-Logik** wird explizit als betroffen genannt — eine Falle, in die Gemma und Qwen tappen.
+- Konkretes Datums-Beispiel mit `26.04.`/`27.04.` macht die Reproduktion greifbar.
+- Sektion "Root Cause" trennt sauber Symptom (`/done`-Fehlverhalten) von Ursache (fehlende zentrale Quest-Tag-Logik).
+- Lösungs-Sektion strukturiert mit "Erwartete Logik nach dem Fix" — definiert das Soll-Verhalten unabhängig von der Implementation.
+- "Nicht empfohlene Alternativen" listet `is_active`/`is_announced`-Felder, "Quest erst um 9:00 schreiben" und "nur `/done` patchen" mit Begründung.
+
+**Schwächen**
+
+- **Kein Code-Snippet für die Helper-Funktionen** — sagt "soll Helper geben" und beschreibt das Verhalten, aber keine Zeile Python. Damit ist die Skizze umsetzbar, aber nicht *unmittelbar* übernehmbar.
+- **Container-TZ-Sekundärbug fehlt komplett** — kein Hinweis darauf, dass `date.today()` in der Container-TZ läuft (UTC, weil `TZ` in `docker-compose.yml` nicht gesetzt ist). Ist der wichtigste Unterschied zu Claudes Plan.
+- Sehr abstrakt gehalten ("Umsetzungsskizze" mit 4 Bullet-Points statt konkretem Patch).
+- Adressiert nicht explizit, wie der "next quest day"-Helper sich verhält, wenn `/start` mitten am Tag aufgerufen wird (Edge-Case, den auch Claude nicht voll auflöst, aber wo Claude wenigstens den Code zeigt, an dem man es mental durchrechnen kann).
+
+**Verifikation gegen Code**
+
+- Code-Links: stichprobenartig geprüft — `bot/database.py:184` (Definition `get_todays_quest`), `:196` (`pick_quest_for_tomorrow`), `:272` (`mark_done`), `:343` (`get_completions_today`), `bot/handlers/quest.py:21` (Aufruf in `show_quest`), `:63` (Aufruf in `mark_done`). Alle korrekt. `bot/scheduler.py:15` und `:22` zeigen auf den `setup_scheduler`-Block, einige Zeilen früher als die exakten `run_daily`-Aufrufe (Z. 16 bzw. Z. 23) — leichte Ungenauigkeit, aber inhaltlich richtig.
+- Lösungs-Logik: ✓ identisch zur Claude-Lösung im Konzept (Berlin-TZ + 9-Uhr-Cutoff), würde den Bug genau so beheben.
+- Bewahrt User-Verhalten: ✓ — `/done` um 7 Uhr trifft die Vortags-Quest, statt blockiert zu werden.
+
+**Score: 8.5 / 10** — sehr nah an Claude, aber ohne Code-Snippets und ohne den Sekundär-Bug zur Container-TZ.
+
+---
+
+### 2.6 Bug — Übersichts-Matrix
+
+| Kriterium | Claude | Codex | Gemini | Gemma | Qwen |
+|-----------|:------:|:-----:|:------:|:-----:|:----:|
+| Bug korrekt diagnostiziert | ✅ | ✅ | ✅ | ✅ | ✅ (umständlich) |
+| Zeitlinien-Tabelle | ✅ | teilweise | ❌ | teilweise | ✅ (widersprüchlich) |
+| Konkrete Zeilennummern | ✅ | ✅ (klickbar) | ❌ | ❌ | teilweise |
+| Streak-Logik miterfasst | ✅ | ✅ | ✅ | ❌ | ❌ |
+| `get_completions_today` miterfasst | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Container-TZ-Sekundärbug | ✅ | ❌ | ❌ | ❌ | erwähnt, aber nicht gefixt |
+| Code-Snippets der Lösung | ✅ | ❌ | teilweise (kaputt) | ❌ | ✅ (aber falsche Lösung) |
+| Alternativen diskutiert | ✅ | ✅ | ❌ | ❌ | teilweise |
+| Lösung bewahrt User-Verhalten | ✅ | ✅ | ✅ | ✅ | ❌ (blockiert /done vor 9 Uhr) |
+| Schema-Migration nötig | nein | nein | nein | nein | ja (Option B) |
 
 ---
 
@@ -322,27 +354,61 @@ User-Beispielmathe: "die 3 und das nachgeholte nur halb anrechnen … insgesamt 
 
 ---
 
-### 3.5 Feature — Übersichts-Matrix
+### 3.5 Codex — `Feature-plan-codex.md`
 
-| Kriterium | Claude | Gemini | Gemma | Qwen |
-|-----------|:------:|:------:|:-----:|:----:|
-| Beide User-Wünsche (Counter + Score) bedient | ✅ | teilweise | teilweise | teilweise |
-| Pünktlich 1.0 / Nachgeholt 0.5 | ✅ | ✅ | ✅ | ✅ |
-| User-Beispielmathe nachgerechnet | ✅ | ✅ | ❌ | teilweise |
-| Streak-Wechselwirkung explizit entschieden | ✅ (nicht heilen) | ✅ (heilen) | ❌ | teilweise |
-| Streak-Entscheidung kohärent mit User-Intent | ✅ | ❌ | — | — |
-| Foto-Variante (analog `/done`) | ✅ | ❌ | ❌ | ja, aber broken |
-| `/quest`-Integration | ✅ | ❌ | ❌ | ❌ |
-| `weekly_summary`-Integration | ✅ | ❌ | ❌ | ❌ |
-| `/stats`-Erweiterung | ✅ | ✅ | ✅ | ✅ |
-| Konkrete ALTER-Statements (Projekt-Pattern) | ✅ | ❌ | teilweise | ✅ |
-| Hilfetext-Update | ✅ | ❌ | ❌ | ❌ |
-| Edge-Cases (kein Quest am Datum, schon erledigt, …) | ✅ | ❌ | teilweise | teilweise |
-| Alternativen / "bewusst nicht eingebaut" | ✅ | ❌ | ❌ | ❌ |
-| Konsistente UI-Sprache (Deutsch) | ✅ | gemischt | ❌ (englisch) | gemischt |
-| Referenziert nicht-existente Methoden | nein | nein | nein | **ja** |
-| Tippfehler / Markdown-Bugs | nein | nein | nein | **ja** |
-| Plan ist umsetzbar wie geschrieben | ✅ | mit Lücken | mit Lücken | ❌ |
+**Stärken**
+
+- **Konzeptuell fast deckungsgleich mit Claude**: drei Metriken (Streak / `total_completed` / `score`), Wertung 1.0 pünktlich / 0.5 nachgeholt, Streak wird *nicht* durchs Nachholen geheilt, eigener Befehl `/nachholen` (deutsch), 7-Tage-Fenster.
+- Begründung der Streak-Entscheidung explizit benannt: "Streak soll Pünktlichkeit messen, Nachholen soll Fleiß messen — zwei getrennte Metriken sind verständlicher als eine künstlich gemischte Kennzahl". Trifft den User-Intent ("nur halb anrechnen").
+- **Eigene gute Idee, die Claude nicht hat**: zusätzlich zu `is_retroactive` als Flag wird `credited_score REAL DEFAULT 1.0` pro Completion vorgeschlagen. Damit ist pro Eintrag exakt gespeichert, wie viel diese Erledigung gezählt hat — robuster für spätere Auswertungen und Re-Sortierungen, weniger Risiko von Drift zwischen `users.score` und der Completion-Historie.
+- Code-Links auf bestehende Stellen (`bot/database.py:75`, `bot/scheduler.py:90`) — direkter Bezug zum Repo.
+- Sauber strukturierter Umsetzungsplan in 9 Schritten am Ende.
+- "Bewusste Entscheidung"-Sektion und "Warum ich diese Variante vorschlage"-Sektion mit klaren Vorteilen.
+- `weekly_summary`-Erweiterung und `/quest`-Hinweiszeile sind beide erwähnt — dieselben Touchpoints wie bei Claude.
+
+**Schwächen**
+
+- **Keine konkreten Code-Snippets** — alles in Prosa-Form. ALTER-Statements werden im Text genannt, aber nicht als ausführbarer Migrations-Block gezeigt. Setzt voraus, dass der Umsetzer den Migrations-Stil aus `database.py:124-131` selbst rekonstruiert.
+- **User-Beispielmathe wird nicht durchgerechnet** — Claude rechnet "3+1+0,5+1 = 4,5" für den User-Fall vor und prüft damit gegen das "ungefähr 4"-Bauchgefühl. Codex bleibt abstrakter.
+- **Foto-Variante für `/nachholen` fehlt** — keine Erwähnung des `MessageHandler(filters.PHOTO & filters.CaptionRegex(…))`-Patterns, obwohl der existierende `/done`-Handler genau dieses Pattern nutzt.
+- **Nicht explizit**: was passiert mit `is_first` beim Nachholen? (Claude sagt klar `is_first=0`.) Was passiert mit dem 🏆-Badge? (Claude reserviert es für Pünktliche.) Bei Codex bleibt das offen.
+- **Keine main.py-Registrierung** gezeigt — nur "Command registrieren" als Stichpunkt.
+- **Kein HILFE_TEXT-Update** erwähnt.
+- **Keine "bewusst nicht enthalten"-Sektion** wie bei Claude. Implizit wird Streak-Heilung abgelehnt, andere Optionen (z. B. Erst-Badge fürs Nachholen, konfigurierbares Fenster) werden nicht abgegrenzt.
+- **Edge-Cases** werden kursorisch genannt ("prüfen, ob es für dieses Datum eine Quest gibt"), aber nicht systematisch als Status-Liste mit User-facing-Texten ausgearbeitet.
+
+**Verifikation gegen Code**
+
+- Schema-Vorschlag: ✓ alle Spalten würden additiv funktionieren, Migration via try/except wäre möglich (auch wenn Codex das nicht zeigt).
+- Methodenname `mark_quest_retroactive`: ✓ kein Konflikt mit existierenden Namen.
+- `credited_score`-Idee: ✓ technisch sauber, würde sogar erlauben, dass `users.score` aus `SUM(credited_score) WHERE chat_id = ? AND user_id = ?` aggregiert wird — Anti-Drift-Sicherung.
+- Code-Links: alle plausibel.
+
+**Score: 8.0 / 10** — solider zweiter Platz, konzeptuell auf Claude-Niveau, aber weniger ausimplementiert.
+
+---
+
+### 3.6 Feature — Übersichts-Matrix
+
+| Kriterium | Claude | Codex | Gemini | Gemma | Qwen |
+|-----------|:------:|:-----:|:------:|:-----:|:----:|
+| Beide User-Wünsche (Counter + Score) bedient | ✅ | ✅ | teilweise | teilweise | teilweise |
+| Pünktlich 1.0 / Nachgeholt 0.5 | ✅ | ✅ | ✅ | ✅ | ✅ |
+| User-Beispielmathe nachgerechnet | ✅ | ❌ | ✅ | ❌ | teilweise |
+| Streak-Wechselwirkung explizit entschieden | ✅ (nicht heilen) | ✅ (nicht heilen) | ✅ (heilen) | ❌ | teilweise |
+| Streak-Entscheidung kohärent mit User-Intent | ✅ | ✅ | ❌ | — | — |
+| Foto-Variante (analog `/done`) | ✅ | ❌ | ❌ | ❌ | ja, aber broken |
+| `/quest`-Integration | ✅ | ✅ | ❌ | ❌ | ❌ |
+| `weekly_summary`-Integration | ✅ | ✅ | ❌ | ❌ | ❌ |
+| `/stats`-Erweiterung | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Konkrete ALTER-Statements (Projekt-Pattern) | ✅ | teilweise (Prosa) | ❌ | teilweise | ✅ |
+| Hilfetext-Update | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Edge-Cases (kein Quest am Datum, schon erledigt, …) | ✅ | teilweise | ❌ | teilweise | teilweise |
+| Alternativen / "bewusst nicht eingebaut" | ✅ | teilweise | ❌ | ❌ | ❌ |
+| Konsistente UI-Sprache (Deutsch) | ✅ | ✅ | gemischt | ❌ (englisch) | gemischt |
+| Referenziert nicht-existente Methoden | nein | nein | nein | nein | **ja** |
+| Tippfehler / Markdown-Bugs | nein | nein | nein | nein | **ja** |
+| Plan ist umsetzbar wie geschrieben | ✅ | mit Detail-Edits | mit Lücken | mit Lücken | ❌ |
 
 ---
 
@@ -351,6 +417,7 @@ User-Beispielmathe: "die 3 und das nachgeholte nur halb anrechnen … insgesamt 
 ### 4.1 Output-Qualität / Schreibstil
 
 - **Claude** schreibt strukturierte, hierarchische Dokumente mit Tabellen, expliziten Code-Blöcken, klaren "Warum"-Sektionen und einer "bewusst nicht enthalten"-Tradition. Liest sich wie ein technischer Plan, den ein Engineer in Review verteidigen würde.
+- **Codex** schreibt sehr klar gegliedert mit klickbaren Code-Links und expliziter Trennung von Symptom/Ursache/Lösung. Stilistisch sauber, prägnant, aber bewusst auf "Plan-Skizze" beschränkt — keine Code-Blöcke. Wirkt wie ein Senior, der die Lösung aufzeigt und die Implementierung dem Umsetzer überlässt.
 - **Gemini** ist sauber, knapp, korrekt — fühlt sich wie eine ausgedünnte Variante des Claude-Outputs an. Keine groben Fehler, aber wenig Tiefe.
 - **Gemma** ist *sehr* knapp. Macht meistens das Richtige, aber lässt vieles unbeantwortet. Englische Strings im deutschen Projekt sind ein klares Negativ-Signal — das Modell hat das Projekt-Konvention-Signal aus `CLAUDE.md` nicht aufgegriffen, obwohl es im Kontext steht.
 - **Qwen** liefert *Volumen*, aber nicht *Substanz*. Der Bug-Output ist Scratchpad-artig und nicht für Konsum bestimmt; der Feature-Output ist Code-lastig, aber der Code referenziert nicht-existente Methoden, hat Tippfehler und einen kaputten Markdown-String. Das deutet darauf hin, dass das Modell viel produziert, aber nicht selbst gegen den echten Code abgleicht.
@@ -360,6 +427,7 @@ User-Beispielmathe: "die 3 und das nachgeholte nur halb anrechnen … insgesamt 
 | Modell | hat den echten Code wirklich gelesen? |
 |--------|---------------------------------------|
 | Claude | Ja — exakte Zeilennummern, korrekte Migrationspatterns, korrekte Handler-Signaturen, Verweis auf `_current_quest_date` als Cross-Feature-Abhängigkeit. |
+| Codex | Ja — klickbare Code-Links auf konkrete Stellen (`database.py:184/196/272/343`), korrekte Methodennamen, kennt `total_completed`/`total_first` aus `users` und identifiziert sie als Wiederverwendbar. Container-TZ-Aspekt aber nicht erkannt. |
 | Gemini | Vermutlich ja — referenziert die richtigen Methoden, aber ohne Zeilennummern. Tiefe spricht eher für Überflug. |
 | Gemma | Ja, aber oberflächlich — kennt die Spalten, aber übergeht Migrationspattern und Sprach-Konvention. |
 | Qwen | Nur teilweise — referenziert nicht-existente Methoden (`get_quest_by_date`, `get_user_profile`), was zeigt, dass nicht jede Methode im Plan tatsächlich gegen den Code abgeglichen wurde. |
@@ -381,14 +449,15 @@ Im Ergebnis 9.0 / 10 für den Feature-Plan und 9.5 / 10 für den Bug-Plan — be
 
 1. **Bug umsetzen nach Claude-Vorlage** — `_current_quest_date()` + `_next_quest_date()` Helfer, alle `date.today()`-Stellen ersetzen, `TZ=Europe/Berlin` in `docker-compose.yml` ergänzen. Keine Schema-Migration nötig.
 
-2. **Feature umsetzen nach Claude-Vorlage**, mit zwei kleinen Anpassungen, die ich beim Self-Review noch sehen würde:
-   - Den `score`-Wert *nicht* in `users` denormalisieren, sondern bei `/stats`-Aufruf aus `completions` mit `SUM(CASE WHEN is_retroactive THEN 0.5 ELSE 1.0 END)` berechnen. Spart eine Spalte und ist robuster gegen Inkonsistenzen.
-   - `quest_date_completed` weglassen — Join über `daily_quests` reicht, gerade bei nur einer Erledigung pro Tag.
-   - Sonst Plan 1:1 übernehmen.
+2. **Feature umsetzen nach Claude-Vorlage, mit Codex' `credited_score`-Idee als Verbesserung**:
+   - Codex' Vorschlag, pro Completion eine `credited_score REAL DEFAULT 1.0`-Spalte zu führen, ist eleganter als Claudes denormalisierte `users.score`-Spalte. Damit lässt sich `users.score` entweder ganz weglassen (immer aggregieren via `SUM(credited_score)`) oder als Cache halten, der jederzeit aus den Completions rekonstruierbar ist. Robuster gegen Inkonsistenzen.
+   - `quest_date_completed` (Claudes Redundanz-Spalte) weglassen — Join über `daily_quests` reicht, gerade bei nur einer Erledigung pro Tag.
+   - Sonst Claudes Plan 1:1 übernehmen (Foto-Variante, `/quest`-Hinweiszeile, `weekly_summary`-Erweiterung, HILFE_TEXT-Update, alle Edge-Case-Status-Texte).
 
 3. **Wenn Reihenfolge wichtig ist**: erst Bug-Fix mergen, *dann* Feature — weil das Feature den Bug-Fix-Helfer (`_current_quest_date`) referenziert. Andernfalls den Fallback (`date.today()`) im Feature-Code temporär lassen und nach Bug-Fix entfernen.
 
 4. **Aus den schwächeren Outputs übernehmen**:
+   - **Codex** — `credited_score`-Spalte (siehe Punkt 2 oben). Außerdem: die klickbaren Code-Links als Stilkonvention für eigene Plan-Dokumente nicht schlecht.
    - **Gemini** — sein Hinweis auf `get_weekly_stats` als potentiell betroffene Stelle ist es wert, im Bug-Fix nochmal kurz zu prüfen (Aggregat-Effekt an Tag-Grenzen).
    - **Qwen** — die Inline-Keyboard-Idee für `/nachholen` ist als spätere UX-Verbesserung interessant, sobald der Basis-Flow steht. Nicht als Erstes umsetzen.
 

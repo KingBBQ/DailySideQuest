@@ -11,3 +11,10 @@ oder allgemein einfach n counter wer schon wie viel insgesamt gemacht hat.
 1. Analysere den bestehenden code
 2. Stelle keine nachfragen sondern mache einen vorschlag, was genau umgesetzt wird und wie du das umsetzen möchtest
 3. ändere keine bestehenden dateien sondern erstelle eine neue Markdown datei "Feature-plan-$NAME.md" in dem du genau den plan spezifizierst. Ersetze $NAME mit dem namen von dir, das heißt mit dem namen des modells, das diese datei bearbeitet. 
+
+# Ergebnisse
+
+- Gemma - 1m 29s - 23k tokens
+- Gemini - 1m 30s - 20k tokens
+- QWEN - 1m 12s - 10k tokens
+- Claude xhigh - 2m 14s 
