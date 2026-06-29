@@ -51,6 +51,34 @@ QUEST_POOL = [
     ("Finde und fotografiere etwas Ungewöhnliches auf deinem heutigen Weg", "Kreativ"),
     ("Kauf etwas in einem Second-Hand-Laden oder auf einem Flohmarkt unter 2 Euro", "Abenteuer"),
     ("Sprich heute eine Person an, die du schon länger ansprechen wolltest", "Mut"),
+    ("Lerne den Namen einer Person, die du regelmäßig siehst, aber nie gefragt hast", "Sozial"),
+    ("Lade jemanden spontan zu einem Kaffee oder Spaziergang ein", "Sozial"),
+    ("Bedank dich heute bewusst bei jemandem, der seinen Job im Hintergrund macht (Kasse, Reinigung, Post)", "Sozial"),
+    ("Frag eine Person nach einem Buch-, Film- oder Musiktipp – und merk ihn dir", "Sozial"),
+    ("Mach heute eine 20-minütige Pause ohne Bildschirm an der frischen Luft", "Körper"),
+    ("Dehne dich 5 Minuten, sobald du aufgestanden bist", "Körper"),
+    ("Trink heute den ganzen Tag über bewusst nur Wasser", "Körper"),
+    ("Halte einmal heute eine Minute lang die Plank-Position", "Körper"),
+    ("Schreib drei Dinge auf, für die du heute dankbar bist", "Kreativ"),
+    ("Bau etwas aus Dingen, die gerade in deiner Reichweite liegen", "Kreativ"),
+    ("Erfinde einen neuen Smoothie oder Drink und gib ihm einen Namen", "Kreativ"),
+    ("Schreib den Anfang einer Geschichte in genau drei Sätzen", "Kreativ"),
+    ("Sag heute einmal höflich Nein, ohne dich zu rechtfertigen", "Mut"),
+    ("Stell im Gespräch oder Meeting die Frage, die du dich sonst nicht traust", "Mut"),
+    ("Gib heute offen zu, dass du etwas nicht weißt – statt so zu tun als ob", "Mut"),
+    ("Sprich vor einer Gruppe etwas an, das dir wichtig ist", "Mut"),
+    ("Lösch heute eine App, die dir nur Zeit klaut", "Digital"),
+    ("Beantworte Nachrichten heute gebündelt erst am Abend", "Digital"),
+    ("Verbring eine ganze Mahlzeit ohne Handy am Tisch", "Digital"),
+    ("Lösch heute 20 Fotos, die du nicht mehr brauchst", "Digital"),
+    ("Lach heute bewusst über dich selbst, wenn etwas schiefgeht", "Spaß"),
+    ("Erzähl jemandem deinen Lieblingswitz", "Spaß"),
+    ("Mach ein Selfie mit dem albernsten Gesicht, das du hinbekommst", "Spaß"),
+    ("Bau in jedes Gespräch heute heimlich das Wort 'Kartoffel' ein", "Spaß"),
+    ("Erkunde eine Straße in deiner Nähe, in der du noch nie warst", "Abenteuer"),
+    ("Steig eine Haltestelle früher aus und geh den Rest zu Fuß", "Abenteuer"),
+    ("Besuch einen Ort in deiner Stadt, an dem du seit Jahren nicht mehr warst", "Abenteuer"),
+    ("Probiere ein Getränk aus einem Land, das du noch nie besucht hast", "Abenteuer"),
 ]
 
 
@@ -132,21 +160,28 @@ class Database:
 
             # Quest-Pool befüllen / Kategorien aktualisieren
             async with db.execute("SELECT COUNT(*) FROM quest_pool") as cursor:
-                (count,) = await cursor.fetchone()
+                (count_before,) = await cursor.fetchone()
 
-            if count == 0:
-                await db.executemany(
-                    "INSERT OR IGNORE INTO quest_pool (text, category) VALUES (?, ?)",
-                    QUEST_POOL,
+            # Fehlende Quests immer ergänzen – idempotent dank UNIQUE-Textfeld.
+            # Bestehende und selbst hinzugefügte Quests bleiben unangetastet.
+            await db.executemany(
+                "INSERT OR IGNORE INTO quest_pool (text, category) VALUES (?, ?)",
+                QUEST_POOL,
+            )
+
+            async with db.execute("SELECT COUNT(*) FROM quest_pool") as cursor:
+                (count_after,) = await cursor.fetchone()
+
+            added = count_after - count_before
+            if added > 0:
+                logger.info(f"Quest-Pool um {added} neue Quests ergänzt (jetzt {count_after})")
+
+            # Kategorien für Alt-Einträge ohne Kategorie nachziehen
+            for text, category in QUEST_POOL:
+                await db.execute(
+                    "UPDATE quest_pool SET category = ? WHERE text = ? AND (category IS NULL OR category = 'Allgemein')",
+                    (category, text),
                 )
-                logger.info(f"Quest-Pool mit {len(QUEST_POOL)} Quests befüllt")
-            else:
-                # Kategorien für bestehende Einträge ohne Kategorie setzen
-                for text, category in QUEST_POOL:
-                    await db.execute(
-                        "UPDATE quest_pool SET category = ? WHERE text = ? AND (category IS NULL OR category = 'Allgemein')",
-                        (category, text),
-                    )
 
             await db.commit()
         logger.info("Datenbank initialisiert")
