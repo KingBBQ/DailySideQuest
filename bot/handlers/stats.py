@@ -31,7 +31,7 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         text += (
             f"{place} *{s['first_name']}*\n"
-            f"   🔥 Streak: {streak}  ✅ Gesamt: {s['total_completed']}  🏆 Erster: {s['total_first']}\n"
+            f"   🔥 Streak: {streak}  ✅ Gesamt: {s['total_completed']}  ⭐ Punkte: {s['score']:.1f}  🏆 Erster: {s['total_first']}\n"
             f"   {fire}\n\n"
         )
 

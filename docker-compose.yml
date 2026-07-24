@@ -8,3 +8,4 @@ services:
       - .env
     environment:
       - PYTHONUNBUFFERED=1
+      - TZ=Europe/Berlin
